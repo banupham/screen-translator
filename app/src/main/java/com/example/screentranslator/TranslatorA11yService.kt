@@ -1,6 +1,5 @@
 package com.example.screentranslator
 
-import android.os.Build
 import android.os.SystemClock
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
@@ -23,11 +22,11 @@ class TranslatorA11yService : AccessibilityService() {
     private var enabled = true
     private var lastAt = 0L
     private var lastHash = 0
-    private val triple = ArrayDeque<Long>()
+    private val triple = ArrayDeque<Long>()   // VolumeUp ×3
 
     override fun onServiceConnected() {
         overlay = OverlayController(this)
-        overlay.showText("Screen Translator: Đang chạy… (vào app để cấp quyền chụp màn hình)")
+        overlay.showText("Screen Translator: Đang chạy… (mở app để cấp quyền chụp màn hình)")
         serviceInfo = serviceInfo.apply {
             flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
                     AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
@@ -39,7 +38,7 @@ class TranslatorA11yService : AccessibilityService() {
         if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP && event.action == KeyEvent.ACTION_DOWN) {
             val now = SystemClock.elapsedRealtime()
             triple.addLast(now)
-            while (triple.isNotEmpty() && now - triple.first > 900) triple.removeFirst()
+            while (triple.isNotEmpty() && now - triple.first() > 900) triple.removeFirst()
             if (triple.size >= 3) {
                 enabled = !enabled
                 triple.clear()
@@ -61,7 +60,6 @@ class TranslatorA11yService : AccessibilityService() {
             else -> return
         }
 
-        // debounce thời gian
         val now = SystemClock.elapsedRealtime()
         if (now - lastAt < 500) return
         lastAt = now
@@ -71,27 +69,21 @@ class TranslatorA11yService : AccessibilityService() {
         scope.launch {
             var combined = nodeText
 
-            // OCR: chụp màn hình nếu đã cấp quyền
             if (ProjectionKeeper.hasPermission()) {
                 ProjectionKeeper.grabBitmap()?.let { bmp ->
-                    val ocr = runCatching { OcrHelper.ocr(bmp) }.getOrNull().orEmpty()
-                    if (ocr.isNotBlank()) {
-                        combined = (nodeText + "\n" + ocr).trim()
-                    }
+                    val ocr = runCatching { OcrHelper.ocr(bmp) }.getOrNull().orElse("")
+                    if (ocr.isNotBlank()) combined = (nodeText + "\n" + ocr).trim()
                 }
             }
 
             if (combined.isBlank()) {
-                withContext(Dispatchers.Main) { overlay.showText("Không thấy chữ (mở app để cấp quyền chụp nếu cần)") }
+                withContext(Dispatchers.Main) { overlay.showText("Không thấy chữ (cấp quyền chụp nếu cần)") }
                 return@launch
             }
 
-            // chỉ dịch khi KHÔNG phải tiếng Việt
             val tag = runCatching { langId.identifyLanguage(combined.take(500)).await() }.getOrNull()
-            val isVi = (tag == "vi")
-            if (isVi) return@launch
+            if (tag == "vi") return@launch
 
-            // debounce nội dung
             val h = combined.hashCode()
             if (h == lastHash) return@launch
             lastHash = h
@@ -110,6 +102,8 @@ class TranslatorA11yService : AccessibilityService() {
             withContext(Dispatchers.Main) { overlay.showText(out) }
         }
     }
+
+    private fun String?.orElse(fallback: String) = if (this == null) fallback else this
 
     private fun collectNodeText(root: AccessibilityNodeInfo?): String {
         if (root == null) return ""
