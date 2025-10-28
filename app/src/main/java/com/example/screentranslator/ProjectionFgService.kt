@@ -29,18 +29,21 @@ class ProjectionFgService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action ?: return START_NOT_STICKY
-        val noti = if (Build.VERSION.SDK_INT >= 26)
-            Notification.Builder(this, CH_ID)
-        else Notification.Builder(this)
-        .setSmallIcon(android.R.drawable.ic_btn_speak_now)
-        .setContentTitle("Screen Translator")
-        .setContentText("Đang chụp màn hình để OCR")
-        .setOngoing(true)
-        .build()
+        // Tạo builder cho cả 2 nhánh, rồi build sau
+        val builder: Notification.Builder =
+            if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CH_ID)
+            else Notification.Builder(this)
+
+        val noti: Notification = builder
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setContentTitle("Screen Translator")
+            .setContentText("Đang chụp màn hình để OCR")
+            .setOngoing(true)
+            .build()
+
         startForeground(NOTI_ID, noti)
 
-        when (action) {
+        when (intent?.action) {
             ACTION_START -> {
                 val code = intent.getIntExtra(EXTRA_CODE, Activity.RESULT_CANCELED)
                 val data = intent.getParcelableExtra<Intent>(EXTRA_DATA)
