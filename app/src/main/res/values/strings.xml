@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Screen Translator</string>
+    <string name="a11y_desc">Dịch văn bản trên màn hình và hiển thị lớp nổi.</string>
+    <string name="a11y_summary">Dịch nhanh &amp; lớp phủ phụ đề</string>
+</resources>
