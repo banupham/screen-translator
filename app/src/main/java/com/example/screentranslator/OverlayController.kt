@@ -2,7 +2,10 @@ package com.example.screentranslator
 
 import android.content.*
 import android.graphics.*
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.os.*
+import android.text.TextUtils
 import android.view.*
 import android.widget.*
 import kotlin.math.roundToInt
@@ -12,7 +15,7 @@ class OverlayController(private val ctx: Context) {
     private val h = Handler(Looper.getMainLooper())
     private val sp = ctx.getSharedPreferences("overlay", Context.MODE_PRIVATE)
 
-    // Bubble nhỏ (idle)
+    // ---- Bubble (idle) ----
     private val bubble = ImageView(ctx).apply {
         setImageBitmap(dot(0xFF4CAF50.toInt()))
         setOnClickListener { togglePinned() }
@@ -32,7 +35,15 @@ class OverlayController(private val ctx: Context) {
         y = sp.getInt("bubble_y", 0)
     }
 
-    // Card phụ đề
+    // ---- Views cho card phụ đề ----
+    private val titleView = TextView(ctx).apply {
+        setTextColor(Color.WHITE); textSize = 11f
+        setTypeface(typeface, Typeface.BOLD)
+    }
+    private val textView = TextView(ctx).apply {
+        setTextColor(Color.WHITE); textSize = 15f
+        maxLines = 4; ellipsize = TextUtils.TruncateAt.END
+    }
     private val card = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         background = rounded(0xCC000000.toInt())
@@ -41,14 +52,7 @@ class OverlayController(private val ctx: Context) {
         addView(textView)
         alpha = 0.98f
         isClickable = false
-    }
-    private val titleView = TextView(ctx).apply {
-        setTextColor(Color.WHITE); textSize = 11f
-        setTypeface(typeface, Typeface.BOLD)
-    }
-    private val textView = TextView(ctx).apply {
-        setTextColor(Color.WHITE); textSize = 15f
-        maxLines = 4; ellipsize = TextUtils.TruncateAt.END
+        visibility = View.GONE
     }
     private val cardLp = WindowManager.LayoutParams(
         WindowManager.LayoutParams.WRAP_CONTENT,
@@ -74,7 +78,6 @@ class OverlayController(private val ctx: Context) {
         try {
             wm.addView(bubble, bubbleLp)
             wm.addView(card, cardLp)
-            card.visibility = View.GONE
             attached = true
         } catch (_: Exception) {}
     }
@@ -86,31 +89,21 @@ class OverlayController(private val ctx: Context) {
         attached = false
     }
 
-    // ----- Hiển thị -----
+    // ---- API hiển thị ----
     fun showState(msg: String) {
-        titleView.text = "Trạng thái"
-        textView.text = msg
+        titleView.text = "Trạng thái"; textView.text = msg
         showCard(autoHideMs = 1500)
     }
-
     fun showWorking(msg: String = "Đang dịch…") {
-        titleView.text = "Đang xử lý"
-        textView.text = msg
-        showCard(autoHideMs = 0) // không tự ẩn khi đang chạy
+        titleView.text = "Đang xử lý"; textView.text = msg
+        showCard(autoHideMs = 0)
     }
-
     fun showResult(text: String, srcTag: String? = null) {
-        titleView.text = when {
-            srcTag == null -> "Kết quả dịch"
-            else -> "Dịch từ ${srcTag.uppercase()}"
-        }
+        titleView.text = if (srcTag == null) "Kết quả dịch" else "Dịch từ ${srcTag.uppercase()}"
         textView.text = text
         showCard(autoHideMs = 3500)
     }
-
-    // Giữ API cũ để không phải sửa nhiều chỗ
     fun showText(text: String) = showResult(text)
-
     fun minimize() { card.visibility = View.GONE }
 
     private fun showCard(autoHideMs: Long) {
@@ -122,55 +115,43 @@ class OverlayController(private val ctx: Context) {
             h.postDelayed(hideTask!!, autoHideMs)
         }
     }
-
     private fun togglePinned() {
         pinned = !pinned
         titleView.text = if (pinned) "Ghim phụ đề" else "Kết quả dịch"
         if (!pinned) {
-            // Thu nhỏ nếu đang hiển thị quá lâu
             hideTask?.let { h.removeCallbacks(it) }
             hideTask = Runnable { card.visibility = View.GONE }
             h.postDelayed(hideTask!!, 1200)
         }
-        // đổi màu bubble theo trạng thái
         bubble.setImageBitmap(dot(if (pinned) 0xFFE91E63.toInt() else 0xFF4CAF50.toInt()))
     }
 
-    // ----- Helpers -----
+    // ---- Helpers ----
     private fun dp(v: Int) = (v * ctx.resources.displayMetrics.density).roundToInt()
-
-    private fun rounded(color: Int): Drawable {
-        val r = GradientDrawable()
-        r.cornerRadius = dp(14).toFloat()
-        r.setColor(color)
-        return r
+    private fun rounded(color: Int): Drawable = GradientDrawable().apply {
+        cornerRadius = dp(14).toFloat()
+        setColor(color)
     }
-
     private fun dot(color: Int): Bitmap {
         val s = dp(42)
         val bmp = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
-        val c = Canvas(bmp)
-        val p = Paint(Paint.ANTI_ALIAS_FLAG)
-        p.color = color
+        val c = Canvas(bmp); val p = Paint(Paint.ANTI_ALIAS_FLAG); p.color = color
         c.drawCircle(s/2f, s/2f, s/2.4f, p)
         return bmp
     }
-
     private fun applyBubblePos(dx: Int, dy: Int) {
         bubbleLp.x += dx; bubbleLp.y += dy
         try { wm.updateViewLayout(bubble, bubbleLp) } catch (_: Exception) {}
         sp.edit().putInt("bubble_x", bubbleLp.x).putInt("bubble_y", bubbleLp.y).apply()
     }
-
-    // Drag listener đơn giản
     private class DragListener(val onMove: (dx: Int, dy: Int)->Unit) : View.OnTouchListener {
-        var lx = 0f; var ly = 0f
+        var lx=0f; var ly=0f
         override fun onTouch(v: View, e: MotionEvent): Boolean {
             when (e.actionMasked) {
-                MotionEvent.ACTION_DOWN -> { lx = e.rawX; ly = e.rawY }
+                MotionEvent.ACTION_DOWN -> { lx=e.rawX; ly=e.rawY }
                 MotionEvent.ACTION_MOVE -> {
-                    onMove((e.rawX - lx).roundToInt(), (e.rawY - ly).roundToInt())
-                    lx = e.rawX; ly = e.rawY
+                    onMove((e.rawX-lx).roundToInt(), (e.rawY-ly).roundToInt())
+                    lx=e.rawX; ly=e.rawY
                 }
             }
             return false
