@@ -35,6 +35,7 @@ dependencies {
     // ML Kit
     implementation("com.google.mlkit:language-id:17.0.4")
     implementation("com.google.mlkit:translate:17.0.2")
+    implementation("com.google.mlkit:text-recognition:16.0.0")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
