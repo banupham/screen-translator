@@ -1,12 +1,9 @@
 package com.example.screentranslator
 
 import android.app.Activity
-import android.content.Context
-import android.content.Intent
-import android.media.projection.MediaProjection
+import android.content.*
 import android.media.projection.MediaProjectionManager
-import android.os.Bundle
-import android.widget.Toast
+import android.os.*
 
 class CaptureActivity : Activity() {
     companion object { private const val REQ = 1001 }
@@ -19,14 +16,12 @@ class CaptureActivity : Activity() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQ && resultCode == RESULT_OK && data != null) {
-            val mpm = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            val proj: MediaProjection = mpm.getMediaProjection(resultCode, data)
-            ProjectionKeeper.init(this, proj)
-            Toast.makeText(this, "Đã cấp quyền chụp màn hình", Toast.LENGTH_SHORT).show()
-        } else {
-            Toast.makeText(this, "Chưa cấp quyền chụp màn hình", Toast.LENGTH_SHORT).show()
+        val svc = Intent(this, ProjectionFgService::class.java).apply {
+            action = ProjectionFgService.ACTION_START
+            putExtra(ProjectionFgService.EXTRA_CODE, resultCode)
+            putExtra(ProjectionFgService.EXTRA_DATA, data)
         }
+        if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc) else startService(svc)
         finish()
     }
 }
