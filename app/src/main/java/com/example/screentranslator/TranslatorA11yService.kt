@@ -22,11 +22,11 @@ class TranslatorA11yService : AccessibilityService() {
     private var enabled = true
     private var lastAt = 0L
     private var lastHash = 0
-    private val triple = ArrayDeque<Long>()   // VolumeUp ×3
+    private val triple = ArrayDeque<Long>()
 
     override fun onServiceConnected() {
         overlay = OverlayController(this)
-        overlay.showText("Screen Translator: Đang chạy… (mở app để cấp quyền chụp màn hình)")
+        overlay.showState("Đang chạy… Nhấn bubble để ghim/thu nhỏ. Volume↑×3 bật/tắt.")
         serviceInfo = serviceInfo.apply {
             flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
                     AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
@@ -42,7 +42,7 @@ class TranslatorA11yService : AccessibilityService() {
             if (triple.size >= 3) {
                 enabled = !enabled
                 triple.clear()
-                overlay.showText(if (enabled) "Dịch: BẬT" else "Dịch: TẮT")
+                overlay.showState(if (enabled) "Dịch: BẬT" else "Dịch: TẮT")
                 return true
             }
         }
@@ -71,22 +71,24 @@ class TranslatorA11yService : AccessibilityService() {
 
             if (ProjectionKeeper.hasPermission()) {
                 ProjectionKeeper.grabBitmap()?.let { bmp ->
-                    val ocr = runCatching { OcrHelper.ocr(bmp) }.getOrNull().orElse("")
+                    val ocr = runCatching { OcrHelper.ocr(bmp) }.getOrNull().orEmpty()
                     if (ocr.isNotBlank()) combined = (nodeText + "\n" + ocr).trim()
                 }
             }
 
-            if (combined.isBlank()) {
-                withContext(Dispatchers.Main) { overlay.showText("Không thấy chữ (cấp quyền chụp nếu cần)") }
-                return@launch
-            }
+            if (combined.isBlank()) return@launch
 
             val tag = runCatching { langId.identifyLanguage(combined.take(500)).await() }.getOrNull()
-            if (tag == "vi") return@launch
+            if (tag == "vi") { // không phải dịch
+                // overlay.showState("VI — bỏ qua")
+                return@launch
+            }
 
             val h = combined.hashCode()
             if (h == lastHash) return@launch
             lastHash = h
+
+            overlay.showWorking("Đang dịch…")
 
             val srcCode = TranslateLanguage.fromLanguageTag(tag ?: "en") ?: TranslateLanguage.ENGLISH
             val translator = translators.getOrPut(srcCode) {
@@ -99,11 +101,9 @@ class TranslatorA11yService : AccessibilityService() {
             runCatching { translator.downloadModelIfNeeded(DownloadConditions.Builder().build()).await() }
 
             val out = runCatching { translator.translate(combined.take(4000)).await() }.getOrNull() ?: return@launch
-            withContext(Dispatchers.Main) { overlay.showText(out) }
+            withContext(Dispatchers.Main) { overlay.showResult(out, tag) }
         }
     }
-
-    private fun String?.orElse(fallback: String) = if (this == null) fallback else this
 
     private fun collectNodeText(root: AccessibilityNodeInfo?): String {
         if (root == null) return ""
